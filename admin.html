@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Review Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        img { width: 50px; border-radius: 4px; }
+        .approve { color: green; cursor: pointer; font-weight: bold; }
+        .reject { color: red; cursor: pointer; font-weight: bold; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Pending Product Approvals</h2>
+    <div id="status"></div>
+    <table id="reviewTable">
+        <thead>
+            <tr>
+                <th>Brand</th>
+                <th>Product</th>
+                <th>Price</th>
+                <th>Image</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <script>
+        const supabase = supabase.createClient('YOUR_SUPABASE_URL', 'YOUR_SUPABASE_ANON_KEY');
+
+        async function loadPending() {
+            const { data, error } = await supabase.from('admin_pending_review').select('*');
+            if (error) return console.error(error);
+
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = data.map(p => `
+                <tr>
+                    <td>${p.brand_name}</td>
+                    <td>${p.product_name}</td>
+                    <td>₹${p.main_sale_price}</td>
+                    <td><img src="${supabase.storage.from('brand-assets').getPublicUrl('products/' + p.thumbnail_uuid).data.publicUrl}"></td>
+                    <td>
+                        <span class="approve" onclick="action(${p.product_id}, 'approve')">APPROVE</span>
+                        <span class="reject" onclick="action(${p.product_id}, 'reject')">REJECT</span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function action(id, type) {
+            const rpcName = type === 'approve' ? 'approve_brand_product' : 'reject_brand_product';
+            const { error } = await supabase.rpc(rpcName, { target_id: id });
+            
+            if (error) alert(error.message);
+            else {
+                alert(`Product ${type}ed!`);
+                loadPending(); // Refresh list
+            }
+        }
+
+        loadPending();
+    </script>
+</body>
+</html>
