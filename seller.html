@@ -49,8 +49,13 @@
 </div>
 
 <script>
-    // Initialize Supabase using config from config.js
-    const supabase = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    // 1. Check if CONFIG exists (from config.js)
+    if (typeof CONFIG === 'undefined') {
+        console.error("CONFIG is missing! Make sure config.js is loaded correctly.");
+    }
+
+    // 2. Use a unique name like 'supabaseClient' instead of 'supabase'
+    const supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
     async function handleSubmit() {
         const btn = document.getElementById('submitBtn');
@@ -68,23 +73,20 @@
             return;
         }
 
-        // UI State
         btn.disabled = true;
         btn.innerText = "Processing...";
         statusDiv.style.display = "block";
-        statusDiv.style.background = "#e1f5fe";
-        statusDiv.innerText = "Uploading images to storage...";
+        statusDiv.innerText = "Uploading images...";
 
         try {
             let uploadedPaths = [];
 
-            // 1. Upload Images to Bucket
             for (let file of files) {
                 const fileExt = file.name.split('.').pop();
-                // UUID-style naming to prevent collisions
-                const fileName = `${crypto.randomUUID()}.${fileExt}`;
+                const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
                 
-                const { data, error: uploadError } = await supabase.storage
+                // Use supabaseClient here
+                const { data, error: uploadError } = await supabaseClient.storage
                     .from('brand-assets')
                     .upload(`products/${fileName}`, file);
 
@@ -92,31 +94,30 @@
                 uploadedPaths.push(fileName);
             }
 
-            // 2. Call the Database RPC function
-            statusDiv.innerText = "Connecting to database...";
-            const { data, error: rpcError } = await supabase.rpc('submit_new_product', {
+            statusDiv.innerText = "Submitting to database...";
+            
+            // Use supabaseClient here
+            const { data, error: rpcError } = await supabaseClient.rpc('submit_new_product', {
                 p_brand_id: parseInt(brandId),
                 p_name: name,
                 p_mrp: parseFloat(mrp),
                 p_sale_price: parseFloat(sale),
-                p_variants: [], // You can add variant logic later
+                p_variants: [], 
                 p_image_paths: uploadedPaths,
-                p_details: { "description": "Submission via Dashboard", "timestamp": new Date().toISOString() }
+                p_details: { "description": "Web Submission" }
             });
 
             if (rpcError) throw rpcError;
 
-            // 3. Success
             statusDiv.style.background = "#d4edda";
-            statusDiv.style.color = "#155724";
-            statusDiv.innerText = "Success! Product submitted for review.";
-            btn.innerText = "Submitted";
+            statusDiv.innerText = "Success! Product ID " + data + " is pending review.";
+            btn.innerText = "Submit Another";
+            btn.disabled = false;
             
         } catch (err) {
-            console.error(err);
+            console.error("Full Error Object:", err);
             statusDiv.style.background = "#f8d7da";
-            statusDiv.style.color = "#721c24";
-            statusDiv.innerText = "Error: " + err.message;
+            statusDiv.innerText = "Error: " + (err.message || "Check Console");
             btn.disabled = false;
             btn.innerText = "Try Again";
         }

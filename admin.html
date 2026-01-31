@@ -1,66 +1,193 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Admin Review Dashboard</title>
+    <meta charset="UTF-8">
+    <title>Admin Watchman - Product Review</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
     <style>
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        img { width: 50px; border-radius: 4px; }
-        .approve { color: green; cursor: pointer; font-weight: bold; }
-        .reject { color: red; cursor: pointer; font-weight: bold; margin-left: 10px; }
+        :root { --primary: #3ecf8e; --danger: #ff4d4d; --bg: #1a1a1a; --card-bg: #2a2a2a; --text: #ffffff; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 40px; background: var(--bg); color: var(--text); margin: 0; }
+        .container { max-width: 900px; margin: auto; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        
+        /* Dashboard List View */
+        .product-card { 
+            background: var(--card-bg); padding: 20px; border-radius: 12px; 
+            display: flex; align-items: center; margin-bottom: 15px;
+            border: 1px solid #333; cursor: pointer; transition: 0.2s;
+        }
+        .product-card:hover { border-color: var(--primary); background: #333; transform: translateY(-2px); }
+        .info { flex-grow: 1; margin-left: 20px; }
+        img.thumb { width: 75px; height: 75px; object-fit: cover; border-radius: 8px; background: #000; border: 1px solid #444; }
+        .brand-badge { background: var(--primary); color: #1a1a1a; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+
+        /* Modal / Detailed View */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); overflow-y: auto; backdrop-filter: blur(4px); }
+        .modal-content { background: #222; margin: 5% auto; padding: 30px; width: 90%; max-width: 750px; border-radius: 15px; border: 1px solid #444; position: relative; }
+        .full-img-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin: 20px 0; }
+        .full-img-grid img { width: 100%; height: 180px; object-fit: cover; border-radius: 8px; border: 2px solid #333; cursor: zoom-in; }
+        .full-img-grid img:hover { border-color: var(--primary); }
+        
+        .detail-section { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #333; }
+        .label { color: var(--primary); font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 1px; }
+        
+        .actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 25px; }
+        button { padding: 12px 28px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-approve { background: var(--primary); color: #1a1a1a; }
+        .btn-reject { background: var(--danger); color: white; }
+        button:hover { opacity: 0.85; transform: scale(1.02); }
+        .close-btn { position: absolute; right: 20px; top: 15px; font-size: 28px; cursor: pointer; color: #666; }
+        .close-btn:hover { color: white; }
     </style>
 </head>
 <body>
-    <h2>Pending Product Approvals</h2>
-    <div id="status"></div>
-    <table id="reviewTable">
-        <thead>
-            <tr>
-                <th>Brand</th>
-                <th>Product</th>
-                <th>Price</th>
-                <th>Image</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-    </table>
 
-    <script>
-        const supabase = supabase.createClient('YOUR_SUPABASE_URL', 'YOUR_SUPABASE_ANON_KEY');
+<div class="container">
+    <header>
+        <h1>Admin Review Dashboard</h1>
+        <div id="stats" style="color: #888;">Scanning for submissions...</div>
+    </header>
 
-        async function loadPending() {
-            const { data, error } = await supabase.from('admin_pending_review').select('*');
-            if (error) return console.error(error);
+    <div id="loading" style="text-align: center; padding: 50px;">
+        <p>Connecting to Supabase...</p>
+    </div>
+    <div id="product-list"></div>
+</div>
 
-            const tbody = document.getElementById('tableBody');
-            tbody.innerHTML = data.map(p => `
-                <tr>
-                    <td>${p.brand_name}</td>
-                    <td>${p.product_name}</td>
-                    <td>₹${p.main_sale_price}</td>
-                    <td><img src="${supabase.storage.from('brand-assets').getPublicUrl('products/' + p.thumbnail_uuid).data.publicUrl}"></td>
-                    <td>
-                        <span class="approve" onclick="action(${p.product_id}, 'approve')">APPROVE</span>
-                        <span class="reject" onclick="action(${p.product_id}, 'reject')">REJECT</span>
-                    </td>
-                </tr>
-            `).join('');
-        }
+<div id="detailModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeModal()">&times;</span>
+        <div id="modal-body"></div>
+        <div class="actions">
+            <button class="btn-reject" id="modalRejectBtn">Reject Submission</button>
+            <button class="btn-approve" id="modalApproveBtn">Approve & Go Live</button>
+        </div>
+    </div>
+</div>
 
-        async function action(id, type) {
-            const rpcName = type === 'approve' ? 'approve_brand_product' : 'reject_brand_product';
-            const { error } = await supabase.rpc(rpcName, { target_id: id });
-            
-            if (error) alert(error.message);
-            else {
-                alert(`Product ${type}ed!`);
-                loadPending(); // Refresh list
+<script>
+    const supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    let pendingProducts = [];
+
+    // Helper to generate the storage URL
+    function getImgUrl(path) {
+        if (!path) return 'https://via.placeholder.com/150?text=No+Image';
+        // Ensures the path includes the 'products/' folder prefix
+        const finalPath = path.includes('/') ? path : `products/${path}`;
+        return supabaseClient.storage.from('brand-assets').getPublicUrl(finalPath).data.publicUrl;
+    }
+
+    async function loadDashboard() {
+        try {
+            // Fetching from the updated SQL View
+            const { data, error } = await supabaseClient
+                .from('admin_pending_review')
+                .select('*');
+
+            document.getElementById('loading').style.display = 'none';
+            if (error) throw error;
+
+            pendingProducts = data;
+            document.getElementById('stats').innerText = `${data.length} Products Pending`;
+
+            if (data.length === 0) {
+                document.getElementById('product-list').innerHTML = 
+                    "<div style='text-align:center; padding:50px; color:#666;'>🎉 All submissions have been reviewed!</div>";
+                return;
             }
+
+            document.getElementById('product-list').innerHTML = data.map(p => {
+                const thumbUrl = getImgUrl(p.thumbnail_uuid);
+                return `
+                    <div class="product-card" onclick="openDetails(${p.product_id})">
+                        <img src="${thumbUrl}" class="thumb" onerror="this.src='https://via.placeholder.com/75?text=Error'">
+                        <div class="info">
+                            <span class="brand-badge">${p.brand_name || 'Brand'}</span>
+                            <h3 style="margin:5px 0">${p.product_name}</h3>
+                            <div style="font-size:14px; color:#888;">Price: ₹${p.main_sale_price}</div>
+                        </div>
+                        <div style="color:var(--primary); font-weight:bold; font-size:13px;">INSPECT →</div>
+                    </div>`;
+            }).join('');
+        } catch (e) {
+            document.getElementById('loading').innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
+        }
+    }
+
+    function openDetails(productId) {
+        const product = pendingProducts.find(p => p.product_id == productId);
+        if (!product) return;
+
+        const body = document.getElementById('modal-body');
+        
+        // Gather images from image_paths array
+        const imageList = (product.image_paths && product.image_paths.length > 0) 
+            ? product.image_paths 
+            : [product.thumbnail_uuid];
+
+        const imagesHtml = imageList.map(path => {
+            const url = getImgUrl(path);
+            return `<img src="${url}" onclick="window.open('${url}')" onerror="this.src='https://via.placeholder.com/150?text=Image+Missing'">`;
+        }).join('');
+
+        // Prepare Description
+        let detailsDisplay = "No full details provided.";
+        if (product.p_details) {
+            detailsDisplay = typeof product.p_details === 'object' 
+                ? JSON.stringify(product.p_details, null, 2) 
+                : product.p_details;
         }
 
-        loadPending();
-    </script>
+        body.innerHTML = `
+            <span class="brand-badge">${product.brand_name}</span>
+            <h2 style="margin:10px 0 20px 0">${product.product_name}</h2>
+            
+            <div class="label">Gallery</div>
+            <div class="full-img-grid">${imagesHtml}</div>
+            
+            <div class="detail-section">
+                <div class="label">Deal Analysis</div>
+                <div style="font-size:20px;">
+                    <b>₹${product.main_sale_price}</b> 
+                    <span style="color:#888; text-decoration:line-through; font-size:15px; margin-left:10px;">₹${product.main_mrp}</span>
+                    <span style="color:var(--primary); font-size:15px; margin-left:10px; font-weight:bold;">${product.discount_percent}% OFF</span>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="label">Full Details / Description</div>
+                <pre style="font-size:13px; color:#3ecf8e; background:#111; padding:15px; border-radius:8px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; border: 1px solid #333;">${detailsDisplay}</pre>
+            </div>
+        `;
+
+        // Update button actions
+        document.getElementById('modalApproveBtn').onclick = () => processDecision(productId, 'approve');
+        document.getElementById('modalRejectBtn').onclick = () => processDecision(productId, 'reject');
+        
+        document.getElementById('detailModal').style.display = 'block';
+    }
+
+    function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
+
+    async function processDecision(id, action) {
+        if(!confirm(`Are you sure you want to ${action} this product?`)) return;
+        
+        const rpcName = action === 'approve' ? 'approve_brand_product' : 'reject_brand_product';
+        const { error } = await supabaseClient.rpc(rpcName, { target_id: id });
+
+        if (error) {
+            alert("Action failed: " + error.message);
+        } else {
+            closeModal();
+            loadDashboard(); // Refresh the list
+        }
+    }
+
+    // Close on outside click
+    window.onclick = (e) => { if (e.target.className === 'modal') closeModal(); }
+    
+    loadDashboard();
+</script>
 </body>
 </html>
