@@ -6,7 +6,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <style>
-        :root { --primary: #3ecf8e; --danger: #ff4d4d; --bg: #1a1a1a; --card-bg: #2a2a2a; --text: #ffffff; }
+        :root { --primary: #3ecf8e; --danger: #ff4d4d; --bg: #1a1a1a; --card-bg: #2a2a2a; --text: #ffffff; --accent: #4f46e5; }
         body { font-family: 'Segoe UI', sans-serif; padding: 40px; background: var(--bg); color: var(--text); margin: 0; }
         .container { max-width: 900px; margin: auto; }
         header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid #333; padding-bottom: 15px; }
@@ -22,26 +22,30 @@
         .brand-badge { background: var(--primary); color: #1a1a1a; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
 
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); overflow-y: auto; backdrop-filter: blur(4px); }
-        .modal-content { background: #222; margin: 5% auto; padding: 30px; width: 90%; max-width: 750px; border-radius: 15px; border: 1px solid #444; position: relative; }
-        .full-img-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
-        .full-img-grid img { width: 100%; height: 150px; object-fit: cover; border-radius: 8px; cursor: zoom-in; }
+        .modal-content { background: #222; margin: 2% auto; padding: 30px; width: 90%; max-width: 800px; border-radius: 15px; border: 1px solid #444; position: relative; }
+        .full-img-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }
+        .full-img-grid img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; cursor: pointer; }
         
-        .detail-section { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333; }
-        .label { color: var(--primary); font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+        .detail-section { background: #2a2a2a; padding: 15px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #333; }
+        .label { color: var(--primary); font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; opacity: 0.8; }
         .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         
-        .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
-        button { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .tag { background: #333; color: #3ecf8e; padding: 4px 10px; border-radius: 20px; font-size: 12px; border: 1px solid #444; display: inline-block; margin: 2px; }
+        .step-item { background: #1f1f1f; padding: 10px; border-radius: 6px; margin-bottom: 5px; font-size: 14px; border-left: 3px solid var(--accent); }
+
+        .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; position: sticky; bottom: 0; background: #222; padding: 10px 0; }
+        button { padding: 12px 25px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-approve { background: var(--primary); color: #1a1a1a; }
         .btn-reject { background: var(--danger); color: white; }
-        button:hover { opacity: 0.85; transform: scale(1.02); }
+        button:hover:not(:disabled) { opacity: 0.85; transform: scale(1.02); }
+        button:disabled { background: #555; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>Admin Product Review Dashboard</h1>
+        <h1>Watchman: Product Review</h1>
         <div id="stats" style="color: #888;"></div>
     </header>
     <div id="product-list"></div>
@@ -52,8 +56,8 @@
         <span style="position:absolute; right:20px; top:15px; font-size:28px; cursor:pointer; color:#666;" onclick="closeModal()">×</span>
         <div id="modal-body"></div>
         <div class="actions">
-            <button class="btn-reject" id="rejBtn">Reject</button>
-            <button class="btn-approve" id="appBtn">Approve & Go Live</button>
+            <button class="btn-reject" id="rejBtn">Reject Product</button>
+            <button class="btn-approve" id="appBtn">Approve & Generate Vector</button>
         </div>
     </div>
 </div>
@@ -63,21 +67,22 @@
     let products = [];
 
     async function load() {
+        // admin_pending_review view should include ingredients, metadata, how_to_use
         const { data, error } = await supabaseClient.from('admin_pending_review').select('*');
         if (error) return console.error(error);
         
         products = data || [];
-        document.getElementById('stats').innerText = `${products.length} Products Pending`;
+        document.getElementById('stats').innerText = `${products.length} Items Pending Review`;
         
         document.getElementById('product-list').innerHTML = products.map(p => `
             <div class="product-card" onclick="openDetails(${p.product_id})">
-                <img src="${supabaseClient.storage.from('brand-assets').getPublicUrl('products/'+p.thumbnail_uuid).data.publicUrl}" class="thumb">
+                <img src="${supabaseClient.storage.from('brand-assets').getPublicUrl('products/'+p.image_paths[0]).data.publicUrl}" class="thumb">
                 <div class="info">
                     <span class="brand-badge">${p.brand_name || 'Brand'}</span>
                     <h3 style="margin:5px 0">${p.product_name}</h3>
                     <p style="margin:0; font-size:14px; color:#888;">₹${p.main_sale_price} | ${p.category || 'N/A'}</p>
                 </div>
-                <div style="color:var(--primary); font-weight:bold; font-size:13px;">INSPECT →</div>
+                <div style="color:var(--primary); font-weight:bold; font-size:11px; letter-spacing:1px;">VIEW DETAILS →</div>
             </div>`).join('');
     }
 
@@ -85,21 +90,31 @@
         const p = products.find(x => x.product_id == id);
         if (!p) return;
 
-        const images = (p.image_paths || [p.thumbnail_uuid]).map(path => 
+        const images = (p.image_paths || []).map(path => 
             `<img src="${supabaseClient.storage.from('brand-assets').getPublicUrl('products/'+path).data.publicUrl}" onclick="window.open(this.src)">`
         ).join('');
         
-        const variants = p.variants?.options ? p.variants.options.join(', ') : 'No variants provided';
+        const variants = p.variants?.options ? p.variants.options.join(', ') : 'None';
+        
+        // Formatting Metadata (Nykaa-style tags)
+        const metaTags = p.metadata ? Object.entries(p.metadata).map(([key, val]) => 
+            `<div class="tag"><b>${key.replace(/_/g, ' ')}:</b> ${val}</div>`
+        ).join('') : 'No metadata';
+
+        // Formatting Steps
+        const steps = p.how_to_use?.steps ? p.how_to_use.steps.map((s, i) => 
+            `<div class="step-item"><b>Step ${i+1}:</b> ${s}</div>`
+        ).join('') : 'No instructions provided';
 
         document.getElementById('modal-body').innerHTML = `
             <span class="brand-badge">${p.brand_name}</span>
             <h2 style="margin:10px 0 20px 0">${p.product_name}</h2>
             
-            <div class="label">Gallery</div>
+            <div class="label">Product Gallery</div>
             <div class="full-img-grid">${images}</div>
             
             <div class="detail-section grid-3">
-                <div><div class="label">Sale Price</div><b style="font-size:18px;">₹${p.main_sale_price}</b></div>
+                <div><div class="label">Sale Price</div><b style="font-size:18px; color:#3ecf8e;">₹${p.main_sale_price}</b></div>
                 <div><div class="label">MRP</div><span style="text-decoration:line-through; color:#888;">₹${p.main_mrp}</span></div>
                 <div><div class="label">Category</div>${p.category || 'N/A'}</div>
             </div>
@@ -107,17 +122,32 @@
             <div class="detail-section grid-3">
                 <div><div class="label">SKU</div>${p.sku || 'N/A'}</div>
                 <div><div class="label">Stock</div>${p.stock_quantity || 0}</div>
-                <div><div class="label">Company</div><b>${p.brand_name}</b></div>
+                <div><div class="label">Product ID</div>#${p.product_id}</div>
+            </div>
+
+            <div class="detail-section">
+                <div class="label">Smart Attributes (Metadata)</div>
+                <div>${metaTags}</div>
+            </div>
+
+            <div class="detail-section">
+                <div class="label">Ingredients</div>
+                <div style="font-size:13px; color:#eee;">${p.ingredients || 'No ingredients list provided'}</div>
+            </div>
+
+            <div class="detail-section">
+                <div class="label">How to Use</div>
+                <div>${steps}</div>
+            </div>
+
+            <div class="detail-section">
+                <div class="label">Full Description</div>
+                <div style="font-size:14px; color:#ccc; white-space: pre-wrap;">${p.full_details?.description || 'No description'}</div>
             </div>
 
             <div class="detail-section">
                 <div class="label">Variants</div>
-                <div style="color:#fff; font-weight:bold;">${variants}</div>
-            </div>
-
-            <div class="detail-section">
-                <div class="label">Description</div>
-                <div style="font-size:14px; color:#ccc; white-space: pre-wrap;">${p.p_details?.description || 'N/A'}</div>
+                <div style="color:#fff;">${variants}</div>
             </div>
         `;
         
@@ -128,10 +158,36 @@
 
     async function decide(id, action) {
         if(!confirm(`Confirm ${action}?`)) return;
-        const rpc = action === 'approve' ? 'approve_brand_product' : 'reject_brand_product';
-        const { error } = await supabaseClient.rpc(rpc, { target_id: id });
-        if (error) alert(error.message);
-        else { closeModal(); load(); }
+        
+        const appBtn = document.getElementById('appBtn');
+        const rejBtn = document.getElementById('rejBtn');
+
+        if(action === 'approve') {
+            appBtn.disabled = true;
+            appBtn.innerText = "Processing AI Vector...";
+            
+            // This calls the Edge Function we will set up next
+            // It approves the product AND creates the embedding
+            const { data, error } = await supabaseClient.functions.invoke('index-product', {
+                body: { product_id: id }
+            });
+
+            if (error) {
+                alert("AI Error: " + error.message);
+                appBtn.disabled = false;
+                appBtn.innerText = "Approve & Go Live";
+                return;
+            }
+            alert("Success! Product is live with AI search enabled.");
+        } else {
+            // Rejection logic (Simple RPC)
+            const { error } = await supabaseClient.rpc('reject_brand_product', { target_id: id });
+            if (error) return alert(error.message);
+            alert("Product Rejected.");
+        }
+
+        closeModal(); 
+        load();
     }
 
     function closeModal() { document.getElementById('detailModal').style.display = 'none'; }
