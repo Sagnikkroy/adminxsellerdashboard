@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Brand Seller Dashboard</title>
+    <title>Seller Dashboard - Submit Product</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="config.js"></script> <style>
-        body { font-family: 'Segoe UI', sans-serif; padding: 40px; background: #f4f7f6; }
-        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
-        .form-group { margin-bottom: 15px; }
-        label { font-weight: bold; display: block; margin-bottom: 5px; }
-        input, button { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background: #3ecf8e; color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        button:hover { background: #36b37a; }
-        #status { padding: 10px; margin-bottom: 20px; border-radius: 4px; display: none; }
+    <script src="config.js"></script> 
+    <style>
+        :root { --primary: #3ecf8e; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', sans-serif; padding: 40px; background: var(--bg); color: #333; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); max-width: 650px; margin: auto; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .full { grid-column: span 2; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; font-size: 13px; color: #666; }
+        input, textarea, button { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:disabled { background: #ccc; }
+        #status { padding: 12px; margin-bottom: 20px; border-radius: 6px; display: none; font-weight: bold; text-align: center; }
     </style>
 </head>
 <body>
@@ -20,109 +23,100 @@
     <h2>Submit New Product</h2>
     <div id="status"></div>
     
-    <div class="form-group">
-        <label>Brand ID (Numeric)</label>
-        <input type="number" id="p_brand_id" placeholder="Enter your Brand ID">
+    <div class="form-grid">
+        <div class="form-group">
+            <label>Brand ID (Numeric)</label>
+            <input type="number" id="p_brand_id" placeholder="e.g. 1">
+        </div>
+        <div class="form-group">
+            <label>Category</label>
+            <input type="text" id="p_category" placeholder="e.g. Beauty">
+        </div>
+        <div class="form-group full">
+            <label>Product Name</label>
+            <input type="text" id="p_name" placeholder="Full Product Title">
+        </div>
+        <div class="form-group">
+            <label>MRP (Original Price)</label>
+            <input type="number" id="p_mrp" placeholder="1999">
+        </div>
+        <div class="form-group">
+            <label>Sale Price (Offer Price)</label>
+            <input type="number" id="p_sale" placeholder="1499">
+        </div>
+        <div class="form-group">
+            <label>SKU</label>
+            <input type="text" id="p_sku" placeholder="PROD-101">
+        </div>
+        <div class="form-group">
+            <label>Stock Quantity</label>
+            <input type="number" id="p_stock" placeholder="50">
+        </div>
+        <div class="form-group full">
+            <label>Variants (comma separated)</label>
+            <input type="text" id="p_variants" placeholder="Small, Medium, Large">
+        </div>
+        <div class="form-group full">
+            <label>Full Details (Description)</label>
+            <textarea id="p_details" rows="4"></textarea>
+        </div>
+        <div class="form-group full">
+            <label>Upload Images (Select All)</label>
+            <input type="file" id="p_images" multiple accept="image/*">
+        </div>
     </div>
-
-    <div class="form-group">
-        <label>Product Name</label>
-        <input type="text" id="p_name" placeholder="E.g. Organic Face Wash">
-    </div>
-
-    <div class="form-group">
-        <label>MRP (Price before discount)</label>
-        <input type="number" id="p_mrp" placeholder="1500">
-    </div>
-
-    <div class="form-group">
-        <label>Sale Price (Final price)</label>
-        <input type="number" id="p_sale" placeholder="999">
-    </div>
-
-    <div class="form-group">
-        <label>Product Images</label>
-        <input type="file" id="p_images" multiple accept="image/*">
-    </div>
-
-    <button id="submitBtn" onclick="handleSubmit()">Upload & Submit for Review</button>
+    <button id="submitBtn" onclick="handleSubmit()">Submit for Watchman Review</button>
 </div>
 
 <script>
-    // 1. Check if CONFIG exists (from config.js)
-    if (typeof CONFIG === 'undefined') {
-        console.error("CONFIG is missing! Make sure config.js is loaded correctly.");
-    }
-
-    // 2. Use a unique name like 'supabaseClient' instead of 'supabase'
     const supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
     async function handleSubmit() {
         const btn = document.getElementById('submitBtn');
         const statusDiv = document.getElementById('status');
-        
-        // Form Values
-        const brandId = document.getElementById('p_brand_id').value;
-        const name = document.getElementById('p_name').value;
-        const mrp = document.getElementById('p_mrp').value;
-        const sale = document.getElementById('p_sale').value;
         const files = document.getElementById('p_images').files;
 
-        if (!brandId || !name || !mrp || !sale || files.length === 0) {
-            alert("Please fill all fields and select at least one image.");
-            return;
-        }
-
         btn.disabled = true;
-        btn.innerText = "Processing...";
         statusDiv.style.display = "block";
-        statusDiv.innerText = "Uploading images...";
+        statusDiv.style.background = "#eee";
+        statusDiv.innerText = "Uploading Assets...";
 
         try {
+            // 1. Image Upload
             let uploadedPaths = [];
-
             for (let file of files) {
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-                
-                // Use supabaseClient here
-                const { data, error: uploadError } = await supabaseClient.storage
-                    .from('brand-assets')
-                    .upload(`products/${fileName}`, file);
-
-                if (uploadError) throw uploadError;
+                const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${file.name.split('.').pop()}`;
+                const { error: upErr } = await supabaseClient.storage.from('brand-assets').upload(`products/${fileName}`, file);
+                if (upErr) throw upErr;
                 uploadedPaths.push(fileName);
             }
 
-            statusDiv.innerText = "Submitting to database...";
-            
-            // Use supabaseClient here
-            const { data, error: rpcError } = await supabaseClient.rpc('submit_new_product', {
-                p_brand_id: parseInt(brandId),
-                p_name: name,
-                p_mrp: parseFloat(mrp),
-                p_sale_price: parseFloat(sale),
-                p_variants: [], 
+            // 2. Submit via RPC
+            const { data, error: rpcErr } = await supabaseClient.rpc('submit_new_product', {
+                p_brand_id: parseInt(document.getElementById('p_brand_id').value),
+                p_name: document.getElementById('p_name').value,
+                p_mrp: parseFloat(document.getElementById('p_mrp').value),
+                p_sale_price: parseFloat(document.getElementById('p_sale').value),
+                p_category: document.getElementById('p_category').value,
+                p_sku: document.getElementById('p_sku').value,
+                p_stock: parseInt(document.getElementById('p_stock').value) || 0,
+                p_variants: { options: document.getElementById('p_variants').value.split(',') },
                 p_image_paths: uploadedPaths,
-                p_details: { "description": "Web Submission" }
+                p_details: { description: document.getElementById('p_details').value }
             });
 
-            if (rpcError) throw rpcError;
+            if (rpcErr) throw rpcErr;
 
             statusDiv.style.background = "#d4edda";
-            statusDiv.innerText = "Success! Product ID " + data + " is pending review.";
+            statusDiv.innerText = "Product Submitted! Admin will review it shortly.";
             btn.innerText = "Submit Another";
             btn.disabled = false;
-            
         } catch (err) {
-            console.error("Full Error Object:", err);
             statusDiv.style.background = "#f8d7da";
-            statusDiv.innerText = "Error: " + (err.message || "Check Console");
+            statusDiv.innerText = "Error: " + err.message;
             btn.disabled = false;
-            btn.innerText = "Try Again";
         }
     }
 </script>
-
 </body>
 </html>
